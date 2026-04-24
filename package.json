@@ -1,0 +1,17 @@
+{
+  "name": "swiftproxy-server",
+  "version": "1.0.0",
+  "description": "SwiftProxy backend using Ultraviolet",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@titaniumnetwork-dev/ultraviolet": "^3.2.6",
+    "express": "^4.18.2",
+    "http-party": "^0.0.1",
+    "@mercuryworkshop/epoxy-transport": "^2.0.9",
+    "bare-server-node": "^1.1.0"
+  }
+}
