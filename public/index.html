@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SwiftProxy</title>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<link rel="apple-touch-icon" href="favicon.png"/>
+<script src="/uv/uv.bundle.js"></script>
+<script src="/uv/uv.config.js"></script>
+<script src="/uv.config.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#4f46e5;--primary-dark:#3730a3;--primary-light:#818cf8;
+  --bg:#f8fafc;--card:#fff;--text:#1e293b;--muted:#64748b;
+  --border:#e2e8f0;--danger:#ef4444;--success:#22c55e;
+  --tab-bg:#1e1b4b;--tab-active:#4f46e5;--tab-hover:#2d2b55;
+}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+nav{background:var(--primary);padding:0 1.25rem;display:flex;align-items:center;justify-content:space-between;height:50px;flex-shrink:0}
+.logo{color:#fff;font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:.4rem}
+.logo span{background:#fff2;border-radius:5px;padding:1px 7px;font-size:.68rem;font-weight:600}
+.nav-right{display:flex;align-items:center;gap:.75rem}
+.nav-right a{color:#c7d2fe;text-decoration:none;font-size:.82rem}
+.worker-btn{background:#ffffff18;color:#c7d2fe;border:1px solid #ffffff25;border-radius:6px;padding:3px 10px;font-size:.78rem;cursor:pointer}
+.worker-btn:hover{background:#ffffff28}
+
+#tab-bar{background:var(--tab-bg);display:flex;align-items:stretch;height:38px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#ffffff20 transparent}
+#tab-bar::-webkit-scrollbar{height:3px}
+#tab-bar::-webkit-scrollbar-thumb{background:#ffffff25;border-radius:2px}
+.tab{display:flex;align-items:center;gap:.4rem;padding:0 .75rem;min-width:140px;max-width:200px;cursor:pointer;border-right:1px solid #ffffff10;font-size:.78rem;color:#a5b4fc;white-space:nowrap;overflow:hidden;position:relative;flex-shrink:0;transition:background .15s}
+.tab:hover{background:var(--tab-hover)}
+.tab.active{background:var(--tab-active);color:#fff}
+.tab-title{flex:1;overflow:hidden;text-overflow:ellipsis}
+.tab-close{opacity:.5;font-size:.7rem;padding:1px 3px;border-radius:3px;flex-shrink:0}
+.tab-close:hover{opacity:1;background:#ffffff20}
+.tab-favicon{width:14px;height:14px;flex-shrink:0}
+.new-tab-btn{display:flex;align-items:center;justify-content:center;padding:0 .75rem;color:#a5b4fc;font-size:1.1rem;cursor:pointer;flex-shrink:0;border:none;background:none}
+.new-tab-btn:hover{color:#fff;background:#ffffff10}
+
+.toolbar{background:#2d2b55;display:flex;align-items:center;gap:.4rem;padding:.35rem .75rem;flex-shrink:0}
+.tb-btn{background:#ffffff15;color:#c7d2fe;border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:.8rem;flex-shrink:0}
+.tb-btn:hover{background:#ffffff28}
+.tb-btn:disabled{opacity:.35;cursor:not-allowed}
+.tb-url{flex:1;background:#ffffff10;border:1px solid #ffffff22;border-radius:6px;padding:5px 10px;color:#fff;font-size:.82rem;outline:none}
+.tb-url:focus{border-color:var(--primary-light);background:#ffffff18}
+.badge{border-radius:20px;padding:2px 9px;font-size:.7rem;background:#ffffff18;flex-shrink:0}
+.badge.secure{color:#86efac}
+.badge.warn{color:#fca5a5}
+
+#content-area{flex:1;position:relative;overflow:hidden}
+.tab-panel{position:absolute;inset:0;display:none;flex-direction:column}
+.tab-panel.active{display:flex}
+
+.home-page{flex:1;overflow-y:auto;background:var(--bg)}
+.hero{background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:3rem 1rem;text-align:center;color:#fff}
+.hero h1{font-size:1.9rem;font-weight:800;margin-bottom:.6rem}
+.hero p{color:#c7d2fe;font-size:.95rem;max-width:480px;margin:0 auto 1.75rem}
+.search-wrap{background:#fff;border-radius:12px;padding:1.25rem;max-width:580px;margin:0 auto;box-shadow:0 8px 28px #0003}
+.url-row{display:flex;gap:.5rem}
+.url-input{flex:1;border:2px solid var(--border);border-radius:8px;padding:.6rem .9rem;font-size:.95rem;outline:none;transition:border .2s}
+.url-input:focus{border-color:var(--primary)}
+.go-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:.6rem 1.25rem;font-size:.95rem;font-weight:600;cursor:pointer}
+.go-btn:hover{background:var(--primary-dark)}
+
+.features{padding:2.5rem 1rem;max-width:860px;margin:0 auto;width:100%}
+.features h2{text-align:center;font-size:1.2rem;margin-bottom:1.5rem}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.feat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem;display:flex;gap:.65rem;align-items:flex-start}
+.feat-icon{font-size:1.4rem}
+.feat-card h4{font-size:.85rem;margin-bottom:.15rem}
+.feat-card p{font-size:.75rem;color:var(--muted)}
+
+.loader-wrap{display:none;flex-direction:column;align-items:center;justify-content:center;gap:.85rem;flex:1;background:#fff}
+.loader-wrap.show{display:flex}
+.spinner{width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-msg{color:var(--muted);font-size:.9rem}
+
+.error-wrap{display:none;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;flex:1;background:#fff;text-align:center;padding:2rem}
+.error-wrap.show{display:flex}
+.error-wrap h3{color:var(--danger);font-size:1.1rem}
+.error-wrap p{color:var(--muted);font-size:.85rem;max-width:440px}
+.error-wrap button{background:var(--primary);color:#fff;border:none;border-radius:7px;padding:.4rem 1rem;cursor:pointer;font-size:.85rem}
+
+.proxy-frame{flex:1;border:none;width:100%;background:#fff}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:#0006;z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:14px;padding:1.75rem;max-width:480px;width:90%;box-shadow:0 20px 60px #0004}
+.modal h3{font-size:1.1rem;margin-bottom:.4rem}
+.modal p{font-size:.83rem;color:var(--muted);margin-bottom:1rem}
+.modal-btns{display:flex;gap:.5rem;justify-content:flex-end}
+.modal-btns button{border:none;border-radius:7px;padding:.45rem 1rem;font-size:.85rem;cursor:pointer}
+.btn-cancel{background:var(--border);color:var(--text)}
+.btn-save{background:var(--primary);color:#fff}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">🌐 SwiftProxy <span>BETA</span></div>
+  <div class="nav-right">
+    <a href="#">About</a>
+  </div>
+</nav>
+
+<!-- LANDING PAGE -->
+<div id="landing" style="display:flex;flex-direction:column;flex:1;overflow-y:auto">
+  <div class="hero" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1rem">
+    <div style="font-size:3rem;margin-bottom:1rem">🌐</div>
+    <h1 style="font-size:2.4rem;font-weight:800;color:#fff;margin-bottom:.3rem">SwiftProxy</h1>
+    <p style="color:#a5b4fc;font-size:.82rem;margin-bottom:1.1rem;letter-spacing:.05em">created by hzr.d</p>
+    <p style="color:#c7d2fe;font-size:1rem;max-width:480px;text-align:center;margin-bottom:2rem">Browse any website freely and anonymously — powered by Ultraviolet. No installs, no extensions.</p>
+    <div style="background:#fff;border-radius:12px;padding:1.25rem;max-width:560px;width:100%;box-shadow:0 10px 40px #0004">
+      <div class="url-row">
+        <input id="landing-url" class="url-input" type="text" placeholder="Enter a URL to get started…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')launchBrowser()"/>
+        <button class="go-btn" onclick="launchBrowser()">Go</button>
+      </div>
+      <div style="display:flex;gap:.75rem;margin-top:.85rem;flex-wrap:wrap">
+        <button onclick="quickLaunch('https://wikipedia.org')" style="background:#f1f5f9;border:none;border-radius:7px;padding:5px 12px;font-size:.78rem;cursor:pointer;color:var(--muted)">🌍 Wikipedia</button>
+        <button onclick="quickLaunch('https://reddit.com')" style="background:#f1f5f9;border:none;border-radius:7px;padding:5px 12px;font-size:.78rem;cursor:pointer;color:var(--muted)">💬 Reddit</button>
+        <button onclick="quickLaunch('https://bbc.com')" style="background:#f1f5f9;border:none;border-radius:7px;padding:5px 12px;font-size:.78rem;cursor:pointer;color:var(--muted)">📰 BBC News</button>
+        <button onclick="quickLaunch('https://github.com')" style="background:#f1f5f9;border:none;border-radius:7px;padding:5px 12px;font-size:.78rem;cursor:pointer;color:var(--muted)">💻 GitHub</button>
+      </div>
+    </div>
+  </div>
+  <div class="features" style="padding:2.5rem 1rem">
+    <h2>Why SwiftProxy?</h2>
+    <div class="feat-grid">
+      <div class="feat-card"><div class="feat-icon">🔒</div><div><h4>Real HTTPS</h4><p>Full SSL — every request encrypted end-to-end.</p></div></div>
+      <div class="feat-card"><div class="feat-icon">⚡</div><div><h4>Ultraviolet Engine</h4><p>Full JS rewriting so clicks, logins and navigation all work.</p></div></div>
+      <div class="feat-card"><div class="feat-icon">🗂️</div><div><h4>Multi-Tab</h4><p>Open multiple sites at once just like a real browser.</p></div></div>
+      <div class="feat-card"><div class="feat-icon">👁️</div><div><h4>Anonymous</h4><p>Your real IP is hidden from every site you visit.</p></div></div>
+    </div>
+  </div>
+  <footer style="background:#1e293b;color:#94a3b8;text-align:center;padding:1rem;font-size:.78rem">&copy; 2026 SwiftProxy &nbsp;|&nbsp; <a href="#" style="color:#818cf8;text-decoration:none">Privacy Policy</a> &nbsp;|&nbsp; For educational use only.</footer>
+</div>
+
+<!-- BROWSER UI -->
+<div id="browser-ui" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div id="tab-bar">
+    <button class="new-tab-btn" onclick="newTab()" title="New Tab">＋</button>
+  </div>
+  <div class="toolbar">
+    <button class="tb-btn" id="btn-back" onclick="goBack()" disabled>◀</button>
+    <button class="tb-btn" id="btn-fwd" onclick="goForward()" disabled>▶</button>
+    <button class="tb-btn" onclick="reload()">↺</button>
+    <button class="tb-btn" onclick="goHome()" title="Home">🏠</button>
+    <span id="tb-badge" class="badge" style="display:none"></span>
+    <input class="tb-url" id="tb-url" type="text" placeholder="Enter a URL…" onkeydown="if(event.key==='Enter')navigate(this.value)"/>
+    <button class="tb-btn" onclick="navigate(document.getElementById('tb-url').value)">Go</button>
+  </div>
+  <div id="content-area"></div>
+</div>
+
+<script>
+let tabs = [], activeTabId = null, tabCounter = 0;
+
+// ── Service Worker ──────────────────────────────────────
+async function registerSW() {
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/uv/uv.sw.js', { scope: __uv$config.prefix });
+    } catch(e) { console.warn('SW registration failed:', e); }
+  }
+}
+
+// ── Init ────────────────────────────────────────────────
+function init() {
+  registerSW();
+}
+
+function quickLaunch(url) {
+  document.getElementById('landing-url').value = url;
+  launchBrowser();
+}
+
+function showLanding() {
+  document.getElementById('landing').style.display = 'flex';
+  document.getElementById('browser-ui').style.display = 'none';
+}
+
+function launchBrowser(url) {
+  const inp = document.getElementById('landing-url');
+  const u = url || norm(inp.value);
+  document.getElementById('landing').style.display = 'none';
+  const bui = document.getElementById('browser-ui');
+  bui.style.display = 'flex';
+  bui.style.flexDirection = 'column';
+  if (tabs.length === 0) newTab(u || '');
+  else if (u) loadUrl(activeTabId, u);
+}
+
+function goHome() {
+  showLanding();
+}
+
+// ── Tab Management ──────────────────────────────────────
+function createTabObj(url) {
+  return { id: ++tabCounter, url: url||'', title: url?'Loading…':'New Tab', hist:[], hIdx:-1, state:'home', favicon:'' };
+}
+
+function newTab(url) {
+  const tab = createTabObj(url);
+  tabs.push(tab);
+  renderTabBar();
+  switchTab(tab.id);
+  if (url) loadUrl(tab.id, url);
+  return tab;
+}
+
+function closeTab(id, e) {
+  e && e.stopPropagation();
+  const idx = tabs.findIndex(t => t.id === id);
+  if (tabs.length === 1) { tabs[idx] = createTabObj(); renderTabBar(); switchTab(tabs[0].id); return; }
+  const panel = document.getElementById('panel-'+id);
+  if (panel) panel.remove();
+  tabs.splice(idx, 1);
+  renderTabBar();
+  if (activeTabId === id) switchTab(tabs[Math.min(idx, tabs.length-1)].id);
+}
+
+function switchTab(id) {
+  activeTabId = id;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('panel-'+id);
+  if (panel) panel.classList.add('active');
+  renderTabBar();
+  updateToolbar();
+}
+
+function getTab(id) { return tabs.find(t => t.id === id); }
+function activeTab() { return getTab(activeTabId); }
+
+function renderTabBar() {
+  const bar = document.getElementById('tab-bar');
+  bar.querySelectorAll('.tab').forEach(t => t.remove());
+  const plus = bar.querySelector('.new-tab-btn');
+  tabs.forEach(tab => {
+    const el = document.createElement('div');
+    el.className = 'tab'+(tab.id===activeTabId?' active':'');
+    el.id = 'tab-el-'+tab.id;
+    el.onclick = () => switchTab(tab.id);
+    el.innerHTML = `
+      ${tab.favicon?`<img class="tab-favicon" src="${tab.favicon}" onerror="this.style.display='none'">`:'<span style="font-size:.75rem">🌐</span>'}
+      <span class="tab-title">${escHtml(tab.title)}</span>
+      <span class="tab-close" onclick="closeTab(${tab.id},event)">✕</span>`;
+    bar.insertBefore(el, plus);
+  });
+  const activeEl = document.getElementById('tab-el-'+activeTabId);
+  if (activeEl) activeEl.scrollIntoView({block:'nearest',inline:'nearest'});
+}
+
+function getOrCreatePanel(tabId) {
+  let panel = document.getElementById('panel-'+tabId);
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.id = 'panel-'+tabId;
+    panel.innerHTML = buildPanelHTML(tabId);
+    document.getElementById('content-area').appendChild(panel);
+    const inp = panel.querySelector('.url-input');
+    if (inp) inp.addEventListener('keydown', e => { if(e.key==='Enter') navigateFromHome(tabId); });
+  }
+  return panel;
+}
+
+function buildPanelHTML(tabId) {
+  return `
+    <div class="home-page">
+      <div class="hero" style="padding:2rem 1rem">
+        <h1 style="font-size:1.5rem">New Tab</h1>
+        <p style="margin-bottom:1.25rem">Enter a URL below to start browsing</p>
+        <div class="search-wrap">
+          <div class="url-row">
+            <input class="url-input" type="text" placeholder="e.g. https://wikipedia.org" autocomplete="off" spellcheck="false"/>
+            <button class="go-btn" onclick="navigateFromHome(${tabId})">Go</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="loader-wrap" id="loader-${tabId}">
+      <div class="spinner"></div>
+      <div class="loader-msg" id="loader-msg-${tabId}">Connecting…</div>
+    </div>
+    <div class="error-wrap" id="error-${tabId}">
+      <h3>⚠️ Could Not Load Page</h3>
+      <p id="error-msg-${tabId}"></p>
+      <button onclick="showTabHome(${tabId})">← New Tab</button>
+    </div>
+    <iframe class="proxy-frame" id="frame-${tabId}" style="display:none" allowfullscreen></iframe>`;
+}
+
+// ── Navigation ──────────────────────────────────────────
+function navigateFromHome(tabId) {
+  const panel = document.getElementById('panel-'+tabId);
+  const inp = panel && panel.querySelector('.url-input');
+  const url = norm(inp ? inp.value : '');
+  if (url) loadUrl(tabId, url);
+}
+
+function navigate(val) {
+  const url = norm(val);
+  if (url) loadUrl(activeTabId, url);
+}
+
+function goBack() {
+  const t = activeTab();
+  if (t && t.hIdx > 0) { t.hIdx--; loadUrl(t.id, t.hist[t.hIdx], true); }
+}
+
+function goForward() {
+  const t = activeTab();
+  if (t && t.hIdx < t.hist.length-1) { t.hIdx++; loadUrl(t.id, t.hist[t.hIdx], true); }
+}
+
+function reload() {
+  const t = activeTab();
+  if (t && t.url) loadUrl(t.id, t.url, true);
+}
+
+// ── Load URL via Ultraviolet ────────────────────────────
+async function loadUrl(tabId, url, isNavigation) {
+  const tab = getTab(tabId);
+  if (!tab) return;
+
+  tab.url = url; tab.state = 'loading'; tab.title = 'Loading…';
+
+  const panel = getOrCreatePanel(tabId);
+  if (tabId === activeTabId) panel.classList.add('active');
+
+  panel.querySelector('.home-page').style.display = 'none';
+  panel.querySelector('.loader-wrap').classList.add('show');
+  panel.querySelector('.error-wrap').classList.remove('show');
+  const frame = panel.querySelector('.proxy-frame');
+  frame.style.display = 'none';
+
+  if (tabId === activeTabId) { document.getElementById('tb-url').value = url; updateToolbar(); }
+  renderTabBar();
+
+  const msgs = ['Connecting…','Fetching page…','Routing through proxy…','Almost there…'];
+  let mi = 0;
+  const msgEl = panel.querySelector('.loader-msg');
+  const ticker = setInterval(() => { msgEl.textContent = msgs[mi++ % msgs.length]; }, 800);
+
+  try {
+    if (!isNavigation) {
+      if (tab.hIdx < tab.hist.length-1) tab.hist = tab.hist.slice(0, tab.hIdx+1);
+      tab.hist.push(url); tab.hIdx = tab.hist.length-1;
+    }
+
+    // Build Ultraviolet URL
+    const uvUrl = __uv$config.prefix + __uv$config.encodeUrl(url);
+
+    clearInterval(ticker);
+    tab.state = 'loaded';
+    tab.title = new URL(url).hostname;
+    tab.favicon = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`;
+
+    panel.querySelector('.loader-wrap').classList.remove('show');
+    frame.style.display = 'flex';
+    frame.src = uvUrl;
+
+    if (tabId === activeTabId) {
+      document.getElementById('tb-url').value = url;
+      const secure = url.startsWith('https://');
+      const badge = document.getElementById('tb-badge');
+      badge.style.display = '';
+      badge.textContent = secure ? '🔒' : '⚠️';
+      badge.className = 'badge '+(secure?'secure':'warn');
+      updateToolbar();
+    }
+    renderTabBar();
+
+  } catch(e) {
+    clearInterval(ticker);
+    tab.state = 'error'; tab.title = 'Error';
+    panel.querySelector('.loader-wrap').classList.remove('show');
+    panel.querySelector('.error-wrap').classList.add('show');
+    panel.querySelector('[id^="error-msg"]').textContent = `Could not load "${url}": ${e.message}`;
+    renderTabBar();
+    if (tabId === activeTabId) updateToolbar();
+  }
+}
+
+function showTabHome(tabId) {
+  const panel = document.getElementById('panel-'+tabId);
+  if (!panel) return;
+  panel.querySelector('.home-page').style.display = '';
+  panel.querySelector('.error-wrap').classList.remove('show');
+  panel.querySelector('.loader-wrap').classList.remove('show');
+  panel.querySelector('.proxy-frame').style.display = 'none';
+  const tab = getTab(tabId);
+  if (tab) { tab.state='home'; tab.title='New Tab'; tab.url=''; renderTabBar(); }
+  if (tabId === activeTabId) { document.getElementById('tb-url').value=''; document.getElementById('tb-badge').style.display='none'; updateToolbar(); }
+}
+
+function updateToolbar() {
+  const t = activeTab();
+  document.getElementById('btn-back').disabled = !t || t.hIdx <= 0;
+  document.getElementById('btn-fwd').disabled = !t || t.hIdx >= t.hist.length-1;
+  if (t) document.getElementById('tb-url').value = t.url || '';
+}
+
+function norm(u) {
+  if (!u) return null; u = u.trim();
+  if (!/^https?:\/\//i.test(u)) u = 'https://'+u;
+  try { new URL(u); return u; } catch { return null; }
+}
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+init();
+</script>
+</body>
+</html>
