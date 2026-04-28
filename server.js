@@ -19,13 +19,13 @@ app.use(express.static(path.join(__dirname, "public")));
 // OPTIONS preflight
 app.options("/proxy", (req, res) => res.set(CORS).sendStatus(204));
 
-// Main proxy endpoint: GET /proxy?url=https://example.com
+// Main proxy endpoint
 app.get("/proxy", async (req, res) => {
   const target = req.query.url;
   if (!target) return res.status(400).json({ error: "Missing ?url= parameter" });
 
   let targetUrl;
-  try { targetUrl = new URL(target); } 
+  try { targetUrl = new URL(target); }
   catch { return res.status(400).json({ error: "Invalid URL" }); }
 
   try {
@@ -41,133 +41,156 @@ app.get("/proxy", async (req, res) => {
     });
 
     const contentType = response.headers.get("content-type") || "text/html";
-    let body = await response.text();
+    const base = getBase(req);
 
     if (contentType.includes("text/html")) {
-      body = rewriteHtml(body, targetUrl.toString(), req);
-    } else if (contentType.includes("javascript") || contentType.includes("css")) {
-      body = rewriteAsset(body, targetUrl.toString(), req);
+      let body = await response.text();
+      body = rewriteHtml(body, targetUrl.toString(), base);
+      res.set({ ...CORS, "Content-Type": "text/html", "X-Proxied-URL": targetUrl.toString() });
+      return res.send(body);
     }
 
-    res.set({ ...CORS, "Content-Type": contentType, "X-Proxied-URL": targetUrl.toString() });
-    res.send(body);
+    if (contentType.includes("javascript")) {
+      let body = await response.text();
+      body = rewriteJs(body, targetUrl.toString(), base);
+      res.set({ ...CORS, "Content-Type": contentType });
+      return res.send(body);
+    }
 
-  } catch (err) {
-    res.status(502).set(CORS).json({ error: err.message });
-  }
-});
+    if (contentType.includes("css")) {
+      let body = await response.text();
+      body = rewriteCss(body, targetUrl.toString(), base);
+      res.set({ ...CORS, "Content-Type": contentType });
+      return res.send(body);
+    }
 
-// Asset proxy: GET /asset?url=https://example.com/style.css
-app.get("/asset", async (req, res) => {
-  const target = req.query.url;
-  if (!target) return res.status(400).end();
-  try {
-    const response = await fetch(target, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      redirect: "follow",
-    });
-    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    // Binary assets — stream directly
     const buffer = await response.buffer();
     res.set({ ...CORS, "Content-Type": contentType });
-    res.send(buffer);
-  } catch {
-    res.status(502).end();
+    return res.send(buffer);
+
+  } catch (err) {
+    res.status(502).set(CORS).send(`
+      <html><body style="font-family:sans-serif;padding:2rem;text-align:center">
+        <h2>⚠️ Proxy Error</h2>
+        <p>${err.message}</p>
+        <p>The site may be blocking proxy access.</p>
+      </body></html>`);
   }
 });
 
-// Fallback to index.html
+// Fallback
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.listen(PORT, () => console.log(`SwiftProxy running on port ${PORT}`));
 
-// ── HTML Rewriting ──────────────────────────────────────
-function proxyPrefix(req) {
-  return `${req.protocol}://${req.get("host")}/proxy?url=`;
-}
-function assetPrefix(req) {
-  return `${req.protocol}://${req.get("host")}/asset?url=`;
+// ── Helpers ─────────────────────────────────────────────
+function getBase(req) {
+  return `${req.protocol}://${req.get("host")}`;
 }
 
-function rewriteHtml(html, baseUrl, req) {
-  const pp = proxyPrefix(req);
-  const ap = assetPrefix(req);
+function toProxyUrl(href, baseUrl, serverBase) {
+  if (!href) return href;
+  href = href.trim();
+  if (/^(javascript:|mailto:|#|data:|blob:)/.test(href)) return href;
+  try {
+    const abs = new URL(href, baseUrl).href;
+    return `${serverBase}/proxy?url=${encodeURIComponent(abs)}`;
+  } catch { return href; }
+}
 
-  const toProxy = (href) => {
-    if (!href) return href;
-    href = href.trim();
-    if (href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("data:")) return href;
-    try {
-      const abs = new URL(href, baseUrl).href;
-      // navigable links go through /proxy, assets through /asset
-      return abs;
-    } catch { return href; }
-  };
+function rewriteHtml(html, baseUrl, serverBase) {
+  // Remove CSP headers that would block our rewrites
+  html = html.replace(/<meta[^>]+Content-Security-Policy[^>]+>/gi, '');
 
-  const toAbs = (href, base) => {
-    if (!href) return href;
-    href = href.trim();
-    if (/^(javascript:|mailto:|#|data:)/.test(href)) return href;
-    try { return new URL(href, base).href; } catch { return href; }
-  };
-
-  // rewrite href (navigation)
+  // Rewrite href (links)
   html = html.replace(/\bhref=(["'])([^"']*)\1/gi, (m, q, val) => {
-    const abs = toAbs(val, baseUrl);
-    if (!abs || /^(javascript:|mailto:|#|data:)/.test(abs)) return m;
-    return `href=${q}${pp}${encodeURIComponent(abs)}${q}`;
+    if (/\.(css|woff|woff2|ttf|eot)(\?|$)/i.test(val)) {
+      // stylesheets/fonts go through proxy too
+      return `href=${q}${toProxyUrl(val, baseUrl, serverBase)}${q}`;
+    }
+    return `href=${q}${toProxyUrl(val, baseUrl, serverBase)}${q}`;
   });
 
-  // rewrite src (assets)
+  // Rewrite src (scripts, images, iframes)
   html = html.replace(/\bsrc=(["'])([^"']*)\1/gi, (m, q, val) => {
-    const abs = toAbs(val, baseUrl);
-    if (!abs || /^(data:)/.test(abs)) return m;
-    return `src=${q}${ap}${encodeURIComponent(abs)}${q}`;
+    return `src=${q}${toProxyUrl(val, baseUrl, serverBase)}${q}`;
   });
 
-  // rewrite action (forms)
+  // Rewrite srcset
+  html = html.replace(/\bsrcset=(["'])([^"']+)\1/gi, (m, q, val) => {
+    const rewritten = val.split(',').map(part => {
+      const [u, ...rest] = part.trim().split(/\s+/);
+      return [toProxyUrl(u, baseUrl, serverBase), ...rest].join(' ');
+    }).join(', ');
+    return `srcset=${q}${rewritten}${q}`;
+  });
+
+  // Rewrite form action
   html = html.replace(/\baction=(["'])([^"']*)\1/gi, (m, q, val) => {
-    const abs = toAbs(val, baseUrl);
-    if (!abs) return m;
-    return `action=${q}${pp}${encodeURIComponent(abs)}${q}`;
+    return `action=${q}${toProxyUrl(val, baseUrl, serverBase)}${q}`;
   });
 
-  // rewrite CSS url() in style tags
+  // Rewrite inline style url()
   html = html.replace(/url\((['"]?)([^)'"]+)\1\)/gi, (m, q, val) => {
-    const abs = toAbs(val, baseUrl);
-    if (!abs || abs.startsWith("data:")) return m;
-    return `url(${q}${ap}${encodeURIComponent(abs)}${q})`;
+    if (val.startsWith('data:')) return m;
+    return `url(${q}${toProxyUrl(val, baseUrl, serverBase)}${q})`;
   });
 
-  // rewrite <link rel stylesheet>
-  html = html.replace(/\bhref=(["'])([^"']*\.css[^"']*)\1/gi, (m, q, val) => {
-    const abs = toAbs(val, baseUrl);
-    if (!abs) return m;
-    return `href=${q}${ap}${encodeURIComponent(abs)}${q}`;
-  });
-
-  // inject base + override window.open / window.location
-  const inject = `
+  // Inject script to intercept JS navigation
+  const intercept = `
 <script>
 (function(){
-  var _pp = ${JSON.stringify(pp)};
-  var _open = window.open;
-  window.open = function(url){ if(url && !/^(javascript:|#)/.test(url)) url = _pp + encodeURIComponent(new URL(url, location.href).href); return _open.call(window, url); };
+  var base = ${JSON.stringify(serverBase)};
+  function proxify(u){
+    if(!u||/^(javascript:|mailto:|#|data:|blob:|\/proxy\?)/.test(u)) return u;
+    try{ return base+'/proxy?url='+encodeURIComponent(new URL(u,location.href).href); }
+    catch(e){ return u; }
+  }
+  // Override fetch
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts){
+    return _fetch.call(this, proxify(url), opts);
+  };
+  // Override XMLHttpRequest
+  var _open = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(m,u){
+    return _open.call(this, m, proxify(u));
+  };
+  // Override window.location assignment
+  var _assign = window.location.assign.bind(window.location);
+  var _replace = window.location.replace.bind(window.location);
+  window.location.assign = function(u){ _assign(proxify(u)); };
+  window.location.replace = function(u){ _replace(proxify(u)); };
+  // Override window.open
+  var _wopen = window.open;
+  window.open = function(u,t,f){ return _wopen.call(this, proxify(u), t, f); };
 })();
 </script>`;
-  html = html.replace(/<head([^>]*)>/i, `<head$1>${inject}`);
 
+  html = html.replace(/<head([^>]*)>/i, `<head$1>${intercept}`);
   return html;
 }
 
-function rewriteAsset(body, baseUrl, req) {
-  const ap = assetPrefix(req);
+function rewriteJs(body, baseUrl, serverBase) {
+  // Rewrite fetch() and XHR calls in JS files
+  body = body.replace(/fetch\((['"`])([^'"`]+)\1/g, (m, q, url) => {
+    try {
+      const abs = new URL(url, baseUrl).href;
+      return `fetch(${q}${serverBase}/proxy?url=${encodeURIComponent(abs)}${q}`;
+    } catch { return m; }
+  });
+  return body;
+}
+
+function rewriteCss(body, baseUrl, serverBase) {
   return body.replace(/url\((['"]?)([^)'"]+)\1\)/gi, (m, q, val) => {
-    if (val.startsWith("data:")) return m;
+    if (val.startsWith('data:')) return m;
     try {
       const abs = new URL(val, baseUrl).href;
-      return `url(${q}${ap}${encodeURIComponent(abs)}${q})`;
+      return `url(${q}${serverBase}/proxy?url=${encodeURIComponent(abs)}${q})`;
     } catch { return m; }
   });
 }
