@@ -6,9 +6,6 @@
 <title>SwiftProxy</title>
 <link rel="icon" type="image/png" href="favicon.png"/>
 <link rel="apple-touch-icon" href="favicon.png"/>
-<script src="/uv/uv.bundle.js"></script>
-<script src="/uv/uv.config.js"></script>
-<script src="/uv.config.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -159,19 +156,8 @@ nav{background:var(--primary);padding:0 1.25rem;display:flex;align-items:center;
 <script>
 let tabs = [], activeTabId = null, tabCounter = 0;
 
-// ── Service Worker ──────────────────────────────────────
-async function registerSW() {
-  if ('serviceWorker' in navigator) {
-    try {
-      await navigator.serviceWorker.register('/uv/uv.sw.js', { scope: __uv$config.prefix });
-    } catch(e) { console.warn('SW registration failed:', e); }
-  }
-}
-
 // ── Init ────────────────────────────────────────────────
-function init() {
-  registerSW();
-}
+function init() {}
 
 function quickLaunch(url) {
   document.getElementById('landing-url').value = url;
@@ -352,8 +338,11 @@ async function loadUrl(tabId, url, isNavigation) {
       tab.hist.push(url); tab.hIdx = tab.hist.length-1;
     }
 
-    // Build Ultraviolet URL
-    const uvUrl = __uv$config.prefix + __uv$config.encodeUrl(url);
+    // Build proxy URL — points to your Railway server
+    const proxyUrl = `/proxy?url=${encodeURIComponent(url)}`;
+    const resp = await fetch(proxyUrl);
+    if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+    const html = await resp.text();
 
     clearInterval(ticker);
     tab.state = 'loaded';
@@ -362,7 +351,7 @@ async function loadUrl(tabId, url, isNavigation) {
 
     panel.querySelector('.loader-wrap').classList.remove('show');
     frame.style.display = 'flex';
-    frame.src = uvUrl;
+    frame.srcdoc = html;
 
     if (tabId === activeTabId) {
       document.getElementById('tb-url').value = url;
