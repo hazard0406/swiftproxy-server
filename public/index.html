@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Home | Schoology</title>
-<link rel="icon" type="image/png" href="IMG_0656.png"/>
-<link rel="apple-touch-icon" href="IMG_0656.png"/>
+<title>SwiftProxy</title>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<link rel="apple-touch-icon" href="favicon.png"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -339,11 +339,6 @@ async function loadUrl(tabId, url, isNavigation) {
     }
 
     // Build proxy URL — points to your Railway server
-    const proxyUrl = `/proxy?url=${encodeURIComponent(url)}`;
-    const resp = await fetch(proxyUrl);
-    if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
-    const html = await resp.text();
-
     clearInterval(ticker);
     tab.state = 'loaded';
     tab.title = new URL(url).hostname;
@@ -351,7 +346,8 @@ async function loadUrl(tabId, url, isNavigation) {
 
     panel.querySelector('.loader-wrap').classList.remove('show');
     frame.style.display = 'flex';
-    frame.srcdoc = html;
+    // Load directly via src so JS, clicks, and navigation all work
+    frame.src = `/proxy?url=${encodeURIComponent(url)}`;
 
     if (tabId === activeTabId) {
       document.getElementById('tb-url').value = url;
